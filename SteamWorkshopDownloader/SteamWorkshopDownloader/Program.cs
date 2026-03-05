@@ -45,6 +45,7 @@ return await Host.Create()
     .Handler(app)
     .Defaults()
     .Console()
+    .Port(80)
 #if DEBUG
     .Development()
 #endif
