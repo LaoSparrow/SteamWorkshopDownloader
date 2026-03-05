@@ -1,0 +1,190 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Trashy Workshop Downloader / 垃圾 Workshop 下载器</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 24px;
+        }
+
+        .queue-form {
+            margin-top: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .queue-form label {
+            font-weight: 600;
+            width: 100%;
+        }
+
+        .queue-form input {
+            min-width: 260px;
+            flex: 1;
+            max-width: 460px;
+            padding: 8px;
+        }
+
+        .queue-form button {
+            padding: 8px 12px;
+        }
+
+        #queueStatus {
+            margin-top: 8px;
+            min-height: 1.2em;
+        }
+
+        #queueStatus.success {
+            color: #166534;
+        }
+
+        #queueStatus.error {
+            color: #991b1b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div>
+
+        <h1>Trashy Workshop Downloader / 垃圾 Workshop 下载器</h1>
+        
+        <p>I made this random sh*t within hours, so don't blame me for this :(</p>
+        <p>这坨东西是我几小时搓出来的，很垃圾所以别骂我 :(</p>
+        
+        <a href="/depots">Click here to browse available workshop files / 点击查看可用的 workshop files</a>
+
+        <form id="queueForm" class="queue-form">
+            <label for="urlOrIdInput">Workshop Url Or Id / Workshop 网址或者 id</label>
+            <input
+                id="urlOrIdInput"
+                name="urlOrId"
+                type="text"
+                placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=xxxxxxx"
+                autocomplete="off" />
+            <button id="jumpDepotButton" type="button">Open Depot / 查看对应 Depot 文件</button>
+            <button id="queueSubmitButton" type="submit">Queue Download / 添加到下载队列</button>
+        </form>
+        <p id="queueStatus" aria-live="polite"></p>
+
+    </div>
+
+    <script>
+        const queueForm = document.getElementById("queueForm");
+        const urlOrIdInput = document.getElementById("urlOrIdInput");
+        const queueSubmitButton = document.getElementById("queueSubmitButton");
+        const jumpDepotButton = document.getElementById("jumpDepotButton");
+        const queueStatus = document.getElementById("queueStatus");
+        const APP_ID = 1281930;
+        const BRANCH_ID = 22147722;
+
+        function setStatus(message, type) {
+            queueStatus.textContent = message;
+            queueStatus.className = type || "";
+        }
+
+        function tryExtractPubFileId(urlOrId) {
+            const value = urlOrId.trim();
+
+            try {
+                const uri = new URL(value);
+                if (uri.hostname !== "steamcommunity.com") {
+                    return { isSuccess: false, message: "not a url to steamcommunity.com" };
+                }
+
+                if (uri.protocol !== "http:" && uri.protocol !== "https:") {
+                    return { isSuccess: false, message: "not a url to steamcommunity.com" };
+                }
+
+                const id = uri.searchParams.get("id");
+                if (!id || !/^\d+$/.test(id)) {
+                    return { isSuccess: false, message: "id param is not a id" };
+                }
+
+                return { isSuccess: true, pubFileId: id };
+            } catch {
+                // Continue and try parse as raw numeric id.
+            }
+
+            if (/^\d+$/.test(value)) {
+                return { isSuccess: true, pubFileId: value };
+            }
+
+            return { isSuccess: false, message: "not a valid URL or ID" };
+        }
+
+        jumpDepotButton.addEventListener("click", () => {
+            const parsed = tryExtractPubFileId(urlOrIdInput.value);
+            if (!parsed.isSuccess) {
+                setStatus(parsed.message, "error");
+                return;
+            }
+
+            window.location.href = `/depots/${APP_ID}/${BRANCH_ID}/${parsed.pubFileId}/`;
+        });
+
+        queueForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const value = urlOrIdInput.value.trim();
+            if (!value) {
+                setStatus("Please enter a workshop URL or ID.", "error");
+                return;
+            }
+
+            queueSubmitButton.disabled = true;
+            setStatus("Submitting...", "");
+
+            try {
+                const response = await fetch("/api/downloader/queue", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ UrlOrId: value })
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch {
+                    payload = null;
+                }
+
+                const isObjectPayload = payload && typeof payload === "object";
+                const isSuccess = isObjectPayload && payload.isSuccess === true;
+                const isFailure = isObjectPayload && payload.isSuccess === false;
+                const message = isObjectPayload && typeof payload.message === "string"
+                    ? payload.message.trim()
+                    : "";
+
+                if (response.ok && isSuccess) {
+                    setStatus(message || "Queued successfully.", "success");
+                    return;
+                }
+
+                if (response.ok && isFailure) {
+                    setStatus(message || "Queue request was rejected.", "error");
+                    return;
+                }
+
+                setStatus("Queue request failed due to an unexpected response.", "error");
+            } catch {
+                setStatus("Queue request failed. Please check the server and try again.", "error");
+            } finally {
+                queueSubmitButton.disabled = false;
+            }
+        });
+    </script>
+
+</body>
+
+</html>
