@@ -19,6 +19,15 @@
             align-items: center;
         }
 
+        #freeSpaceStatus {
+            margin: 6px 0 0;
+            min-height: 1.2em;
+        }
+
+        #freeSpaceStatus.error {
+            color: #991b1b;
+        }
+
         .queue-form label {
             font-weight: 600;
             width: 100%;
@@ -74,6 +83,9 @@
         </form>
         <p id="queueStatus" aria-live="polite"></p>
 
+        <span>Server storage / 服务器存储:</span>
+        <p id="freeSpaceStatus" aria-live="polite">Loading...</p>
+
     </div>
 
     <script>
@@ -82,12 +94,83 @@
         const queueSubmitButton = document.getElementById("queueSubmitButton");
         const jumpDepotButton = document.getElementById("jumpDepotButton");
         const queueStatus = document.getElementById("queueStatus");
+        const freeSpaceStatus = document.getElementById("freeSpaceStatus");
         const APP_ID = 1281930;
         const BRANCH_ID = 22147722;
 
         function setStatus(message, type) {
             queueStatus.textContent = message;
             queueStatus.className = type || "";
+        }
+
+        function setFreeSpaceStatus(message, type) {
+            freeSpaceStatus.textContent = message;
+            freeSpaceStatus.className = type || "";
+        }
+
+        function formatBytes(bytes) {
+            if (!Number.isFinite(bytes) || bytes < 0) {
+                return null;
+            }
+
+            if (bytes === 0) {
+                return "0 B";
+            }
+
+            const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+            let value = bytes;
+            let unitIndex = 0;
+
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex += 1;
+            }
+
+            const precision = unitIndex === 0 ? 0 : 2;
+            return `${value.toFixed(precision)} ${units[unitIndex]}`;
+        }
+
+        async function loadFreeSpace() {
+            try {
+                const response = await fetch("/api/downloader/available-free-space", {
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+
+                if (!response.ok) {
+                    setFreeSpaceStatus("Storage status unavailable.", "error");
+                    return;
+                }
+
+                const payload = await response.json();
+                const availableFreeSpace = Number(payload?.availableFreeSpace);
+                const totalSize = Number(payload?.totalSize);
+
+                if (!Number.isFinite(availableFreeSpace) || !Number.isFinite(totalSize) || totalSize <= 0 || availableFreeSpace < 0 || availableFreeSpace > totalSize) {
+                    setFreeSpaceStatus("Storage status unavailable.", "error");
+                    return;
+                }
+
+                const usedSpace = totalSize - availableFreeSpace;
+                const usedPercent = (usedSpace / totalSize) * 100;
+                const usedText = formatBytes(usedSpace);
+                const freeText = formatBytes(availableFreeSpace);
+                const totalText = formatBytes(totalSize);
+
+                if (!usedText || !freeText || !totalText) {
+                    setFreeSpaceStatus("Storage status unavailable.", "error");
+                    return;
+                }
+
+                setFreeSpaceStatus(
+                    `Used ${usedText} / ${totalText} (${usedPercent.toFixed(1)}%) | Free ${freeText}`,
+                    ""
+                );
+            } catch {
+                setFreeSpaceStatus("Storage status unavailable.", "error");
+            }
         }
 
         function tryExtractPubFileId(urlOrId) {
@@ -183,6 +266,8 @@
                 queueSubmitButton.disabled = false;
             }
         });
+
+        loadFreeSpace();
     </script>
 
 </body>

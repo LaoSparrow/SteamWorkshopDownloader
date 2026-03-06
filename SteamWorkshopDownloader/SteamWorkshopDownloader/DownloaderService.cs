@@ -51,4 +51,15 @@ public class DownloaderService
             ? new PostQueueResponse(true, "Successfully posted queue!")
             : new PostQueueResponse(false, "Failed to post queue! Too many queued items");
     }
+
+    public record AvailableFreeSpaceResponse(long AvailableFreeSpace, long TotalSize);
+
+    [ResourceMethod(RequestMethod.Get, "available-free-space")]
+    public AvailableFreeSpaceResponse GetAvailableFreeSpace()
+    {
+        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath("./depots"))!);
+        return drive.IsReady
+            ? new AvailableFreeSpaceResponse(drive.AvailableFreeSpace, drive.TotalSize)
+            : new AvailableFreeSpaceResponse(-1, -1);
+    }
 }
