@@ -62,4 +62,10 @@ public class DownloaderService
             ? new AvailableFreeSpaceResponse(drive.AvailableFreeSpace, drive.TotalSize)
             : new AvailableFreeSpaceResponse(-1, -1);
     }
+
+    [ResourceMethod(RequestMethod.Get, "logs")]
+    public string GetLogs()
+    {
+        return Utils.ReadTailLines("./log.txt");
+    }
 }
