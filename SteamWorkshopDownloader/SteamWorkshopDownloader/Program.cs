@@ -24,8 +24,8 @@ var ipLimiter = PartitionedRateLimiter.Create<string, string>(ip =>
         partitionKey: ip,
         factory: partition => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 5,
-            Window = TimeSpan.FromSeconds(10),
+            PermitLimit = 60,
+            Window = TimeSpan.FromSeconds(60),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             QueueLimit = 0
         });
