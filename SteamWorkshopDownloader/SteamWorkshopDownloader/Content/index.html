@@ -98,7 +98,6 @@
         const queueStatus = document.getElementById("queueStatus");
         const freeSpaceStatus = document.getElementById("freeSpaceStatus");
         const APP_ID = 1281930;
-        const BRANCH_ID = 22147722;
 
         function setStatus(message, type) {
             queueStatus.textContent = message;
@@ -212,7 +211,7 @@
                 return;
             }
 
-            window.location.href = `/depots/${APP_ID}/${BRANCH_ID}/${parsed.pubFileId}/`;
+            window.location.href = `/depots/${APP_ID}/${parsed.pubFileId}/`;
         });
 
         queueForm.addEventListener("submit", async (event) => {
