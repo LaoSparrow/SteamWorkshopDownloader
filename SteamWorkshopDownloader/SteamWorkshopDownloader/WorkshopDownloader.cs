@@ -16,6 +16,7 @@ public static class WorkshopDownloader
     public static DownloadQueueEntry? CurrentDownloadEntry;
 
     public const uint APP_ID = 1281930;
+    public const long EXPECTED_FREE_SPACE = 2L * 1024 * 1024 * 1024; // 2GB
 
     public static void Init()
     {
@@ -75,6 +76,8 @@ public static class WorkshopDownloader
             while (!Cts.Token.IsCancellationRequested &&
                    await DownloadQueue.Reader.WaitToReadAsync(Cts.Token))
             {
+                Utils.CleanUpDirectory($"./depots/{APP_ID}", EXPECTED_FREE_SPACE);
+                
                 // anonymous
                 if (ContentDownloader.InitializeSteam3(null, null))
                 {

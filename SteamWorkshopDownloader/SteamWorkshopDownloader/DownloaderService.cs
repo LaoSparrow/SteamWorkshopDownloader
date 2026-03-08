@@ -57,10 +57,8 @@ public class DownloaderService
     [ResourceMethod(RequestMethod.Get, "available-free-space")]
     public AvailableFreeSpaceResponse GetAvailableFreeSpace()
     {
-        var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath("./depots"))!);
-        return drive.IsReady
-            ? new AvailableFreeSpaceResponse(drive.AvailableFreeSpace, drive.TotalSize)
-            : new AvailableFreeSpaceResponse(-1, -1);
+        var (availableSpace, totalSize) = Utils.GetDriveAvailableFreeSpace("./depots");
+        return new AvailableFreeSpaceResponse(availableSpace, totalSize);
     }
 
     [ResourceMethod(RequestMethod.Get, "logs")]
