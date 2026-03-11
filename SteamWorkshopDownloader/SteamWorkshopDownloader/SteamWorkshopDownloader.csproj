@@ -21,10 +21,12 @@
 
     <ItemGroup>
         <None Remove="Content\index.html"/>
-    </ItemGroup>
-
-    <ItemGroup>
         <EmbeddedResource Include="Content\index.html"/>
+        <None Remove="Content\robots.txt" />
+        <EmbeddedResource Include="Content\robots.txt" />
+
+        <None Remove="Resources\trapurls.txt" />
+        <EmbeddedResource Include="Resources\trapurls.txt" />
     </ItemGroup>
 
     <ItemGroup>
