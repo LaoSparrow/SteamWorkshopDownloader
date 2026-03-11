@@ -16,7 +16,7 @@ public static class WorkshopDownloader
     public static DownloadQueueEntry? CurrentDownloadEntry;
 
     public const uint APP_ID = 1281930;
-    public const long EXPECTED_FREE_SPACE = 3L * 1024 * 1024 * 1024; // 3GB
+    public const long EXPECTED_FREE_SPACE = 5L * 1024 * 1024 * 1024; // 5GB
 
     public static void Init()
     {
