@@ -1669,7 +1669,6 @@
 /human.aspx
 /dana-cached/hc/HostCheckerInstaller.osx
 /webui
-/favicon.ico
 /evox/about
 /confluence/rest/applinks/1.0/manifest
 /HNAP1
