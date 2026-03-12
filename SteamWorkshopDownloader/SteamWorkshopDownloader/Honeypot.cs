@@ -254,6 +254,7 @@ internal static class HoneypotPaths
         "/",
         "/index.html",
         "/favicon.ico",
+        "/robots.txt",
         "/api/downloader",
         "/api/downloader/queue",
         "/api/downloader/available-free-space",
