@@ -87,6 +87,9 @@ public static class WorkshopDownloader
                         {
                             try
                             {
+                                if (Directory.Exists($"./depots/{APP_ID}/{entry.PubFileId}"))
+                                    Directory.SetLastAccessTimeUtc($"./depots/{APP_ID}/{entry.PubFileId}", DateTime.UtcNow);
+                                
                                 CurrentDownloadEntry = entry;
                                 // Do the true download operations
                                 ContentDownloader.Config.InstallDirectorySuffix = entry.PubFileId.ToString();

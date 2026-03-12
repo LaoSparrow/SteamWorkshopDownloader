@@ -90,7 +90,7 @@ public static class Utils
         if (currentFreeSpace >= expectedFreeSpace)
             return;
         
-        foreach (var dir in parentDirInfo.GetDirectories().OrderBy(x => x.LastWriteTimeUtc))
+        foreach (var dir in parentDirInfo.GetDirectories().OrderBy(x => x.LastAccessTimeUtc))
         {
             var dirOccupiedSize = GetDirectorySize(dir.FullName);
             if (dirOccupiedSize == -1)
