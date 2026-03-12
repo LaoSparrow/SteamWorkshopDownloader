@@ -74,22 +74,24 @@ public static class Utils
             : (-1, -1);
     }
 
-    public static void CleanUpDirectory(string folderPath, long expectedFreeSpace)
+    // return cleaned up dir name
+    public static List<string> CleanUpDirectory(string folderPath, long expectedFreeSpace)
     {
         var parentDirInfo = new DirectoryInfo(folderPath);
         if (!parentDirInfo.Exists) 
-            return;
+            return [];
         
         var (availDiskSpace, totalDiskSpace) = GetDriveAvailableFreeSpace(folderPath);
         if (availDiskSpace == -1 || totalDiskSpace == -1) 
-            return;
+            return [];
         
         var currentFreeSpace = availDiskSpace;
         
         // 如果当前剩余空间已经达标，直接返回，无需清理
         if (currentFreeSpace >= expectedFreeSpace)
-            return;
+            return [];
         
+        var result = new List<string>();
         foreach (var dir in parentDirInfo.GetDirectories().OrderBy(x => x.LastAccessTimeUtc))
         {
             var dirOccupiedSize = GetDirectorySize(dir.FullName);
@@ -98,6 +100,8 @@ public static class Utils
             
             try
             {
+                result.Add(dir.Name);
+                
                 // 加入异常捕获，防止个别文件被占用导致整体中止
                 dir.Delete(true);
                 
@@ -113,6 +117,8 @@ public static class Utils
                 // ignored
             }
         }
+
+        return result;
     }
     
     static long GetDirectorySize(string folderPath)

@@ -8,9 +8,6 @@ namespace SteamWorkshopDownloader;
 
 public class DownloaderService
 {
-    public static ConcurrentDictionary<ulong, DateTime> LastDownloads { get; } = new();
-    public static readonly TimeSpan Interval = TimeSpan.FromDays(1);
-    
     public record PostQueueRequest(string UrlOrId);
     public record PostQueueResponse(bool IsSuccess, string Message);
     
@@ -40,16 +37,18 @@ public class DownloaderService
         {
             return new PostQueueResponse(false, "not a valid URL or ID");
         }
-
-        if (LastDownloads.TryGetValue(extractedPubFileId, out var lastDownload) && DateTime.UtcNow - lastDownload < Interval)
-        {
-            return new PostQueueResponse(false, "already downloaded within a day");
-        }
-        LastDownloads[extractedPubFileId] = DateTime.UtcNow;
+        
         var result = WorkshopDownloader.TryPushDownloadQueue(extractedPubFileId);
-        return result
-            ? new PostQueueResponse(true, "Successfully posted queue!")
-            : new PostQueueResponse(false, "Failed to post queue! Too many queued items");
+        return result switch
+        {
+            WorkshopDownloader.PushDownloadQueueResult.Success =>
+                new PostQueueResponse(true, "Successfully posted queue!"),
+            WorkshopDownloader.PushDownloadQueueResult.QueueFull =>
+                new PostQueueResponse(false, "Failed to post queue! Too many queued items"),
+            WorkshopDownloader.PushDownloadQueueResult.ReachDownloadThreshold =>
+                new PostQueueResponse(false, "already downloaded within a day"),
+            _ => throw new ArgumentOutOfRangeException()
+        };
     }
 
     public record AvailableFreeSpaceResponse(long AvailableFreeSpace, long TotalSize);

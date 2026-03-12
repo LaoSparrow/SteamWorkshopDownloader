@@ -32,6 +32,7 @@ var app = Layout.Create()
     .Add(StaticWebsite.From(ResourceTree.FromAssembly("Content")))
     .Add("depots", new TrailingSlashFix(Listing.From(ResourceTree.FromDirectory("./depots")), "/depots"))
     .AddService<DownloaderService>("/api/downloader")
+    .Add(new WorkshopDownloaderLockConcernBuilder())
     .Add(new HoneypotBuilder())
 #if DEBUG
     .AddOpenApi()

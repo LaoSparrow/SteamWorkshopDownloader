@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using DepotDownloader;
 
@@ -14,8 +15,10 @@ public static class WorkshopDownloader
     public static Channel<(DownloadQueueEntry?, string)> MessageQueue = Channel.CreateUnbounded<(DownloadQueueEntry?, string)>();
 
     public static DownloadQueueEntry? CurrentDownloadEntry;
-
-    public const uint APP_ID = 1281930;
+    
+    public static ConcurrentDictionary<ulong, DateTime> LastDownloads { get; } = new();
+    public static readonly TimeSpan Interval = TimeSpan.FromDays(1);
+    
     public const long EXPECTED_FREE_SPACE = 5L * 1024 * 1024 * 1024; // 5GB
 
     public static void Init()
@@ -61,11 +64,26 @@ public static class WorkshopDownloader
         }
         DownloaderTask = null;
     }
-
-    public static bool TryPushDownloadQueue(ulong pubFileId)
+    
+    public enum PushDownloadQueueResult
     {
-        return DownloadQueue.Writer.TryWrite(new DownloadQueueEntry(pubFileId, DateTime.UtcNow));
-    } 
+        Success,
+        QueueFull,
+        ReachDownloadThreshold
+    }
+
+    public static PushDownloadQueueResult TryPushDownloadQueue(ulong pubFileId)
+    {
+        if (LastDownloads.TryGetValue(pubFileId, out var lastDownload) && DateTime.UtcNow - lastDownload < Interval)
+        {
+            return PushDownloadQueueResult.ReachDownloadThreshold;
+        }
+        LastDownloads[pubFileId] = DateTime.UtcNow;
+        
+        return DownloadQueue.Writer.TryWrite(new DownloadQueueEntry(pubFileId, DateTime.UtcNow))
+            ? PushDownloadQueueResult.Success
+            : PushDownloadQueueResult.QueueFull;
+    }
 
     private static async Task DownloaderLoop()
     {
@@ -76,7 +94,8 @@ public static class WorkshopDownloader
             while (!Cts.Token.IsCancellationRequested &&
                    await DownloadQueue.Reader.WaitToReadAsync(Cts.Token))
             {
-                Utils.CleanUpDirectory($"./depots/{APP_ID}", EXPECTED_FREE_SPACE);
+                RemoveFromLastDownloads(
+                    Utils.CleanUpDirectory($"./depots/{Constants.APP_ID}", EXPECTED_FREE_SPACE));
                 
                 // anonymous
                 if (ContentDownloader.InitializeSteam3(null, null))
@@ -87,13 +106,14 @@ public static class WorkshopDownloader
                         {
                             try
                             {
-                                if (Directory.Exists($"./depots/{APP_ID}/{entry.PubFileId}"))
-                                    Directory.SetLastAccessTimeUtc($"./depots/{APP_ID}/{entry.PubFileId}", DateTime.UtcNow);
+                                using var _ = new DepotLocker(entry.PubFileId);
+                                if (Directory.Exists($"./depots/{Constants.APP_ID}/{entry.PubFileId}"))
+                                    Directory.SetLastAccessTimeUtc($"./depots/{Constants.APP_ID}/{entry.PubFileId}", DateTime.UtcNow);
                                 
                                 CurrentDownloadEntry = entry;
                                 // Do the true download operations
                                 ContentDownloader.Config.InstallDirectorySuffix = entry.PubFileId.ToString();
-                                await ContentDownloader.DownloadPubfileAsync(APP_ID, entry.PubFileId);
+                                await ContentDownloader.DownloadPubfileAsync(Constants.APP_ID, entry.PubFileId);
                                 ContentDownloader.Config.InstallDirectorySuffix = string.Empty;
                             }
                             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -129,6 +149,15 @@ public static class WorkshopDownloader
         {
             ContentDownloader.MessageCallback += msgCallback;
             ContentDownloader.Config.InstallDirectorySuffix = string.Empty;
+        }
+    }
+
+    public static void RemoveFromLastDownloads(IEnumerable<string> pubFileIds)
+    {
+        foreach (var idStr in pubFileIds)
+        {
+            if (ulong.TryParse(idStr, out var id))
+                LastDownloads.TryRemove(id, out _);
         }
     }
 }
