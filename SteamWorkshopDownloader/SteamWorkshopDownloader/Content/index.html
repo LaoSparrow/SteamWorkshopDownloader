@@ -85,8 +85,9 @@
         
         <p>
             Usage: <br>
-            Goto <a href="https://steamcommunity.com/app/1281930/workshop/">https://steamcommunity.com/app/1281930/workshop/</a> <br>
-            Search for the mod you want <br>
+            Goto tModLoader Workshop <a href="https://steamcommunity.com/app/1281930/workshop/">https://steamcommunity.com/app/1281930/workshop/</a> <br>
+            or Terraria Workshop <a href="https://steamcommunity.com/app/105600/workshop/">https://steamcommunity.com/app/105600/workshop/</a> <br>
+            Search for the mod / resources pack you want <br>
             Click into mod info page (where you can see the green "+ Subscribe" button) <br>
             Copy the link <br>
             Go back to this page and paste the link into the above textbox <br>
@@ -95,22 +96,25 @@
             Then click "Open Depot" again <br>
             You got the mod files! Yay! <br>
             (It would be better to check if the mod files have been downloaded by clicking "Open Depot", so less time will be wasted) <br>
-            (Only click "Queue Download" if you think the mod files have been updated)
+            (Only click "Queue Download" if you think the mod files have been updated) <br>
+            (Collection workshop items are not supported, please download them one by one)
         </p>
         
         <p>
             用法: <br>
-            去 <a href="https://steamcommunity.com/app/1281930/workshop/">https://steamcommunity.com/app/1281930/workshop/</a> <br>
-            搜索你想要的 mod <br>
+            去 tModLoader Workshop <a href="https://steamcommunity.com/app/1281930/workshop/">https://steamcommunity.com/app/1281930/workshop/</a> <br>
+            或者 泰拉瑞亚 Workshop <a href="https://steamcommunity.com/app/105600/workshop/">https://steamcommunity.com/app/105600/workshop/</a> <br>
+            搜索你想要的 mod / 材质包 <br>
             点击进入 mod 详情页 (也就是你能看到绿色的 "+ 订阅" 按钮的页面) <br>
             复制网页链接 <br>
             回到这个页面，然后把链接粘贴到上面的文本框里 <br>
             点击 "查看对应 Depot 文件" <br>
             如果报错 404，点击 "添加到下载队列"，等 10-30 秒让服务器从 steam 拉取 mod 文件 <br>
-            然后再点击 "Open Depot" <br>
+            然后再点击 "查看对应 Depot 文件" <br>
             然后就拿到 mod 文件了( <br>
             (最好先点击 "查看对应 Depot 文件" 查看 mod 文件是不是被下过了，更节省时间) <br>
-            (不要上来就点 "添加到下载队列" ，只有在你觉得 mod 有更新的时候点)
+            (不要上来就点 "添加到下载队列" ，只有在你觉得 mod 有更新的时候点) <br>
+            (collection 类型的 workshop item 不支持，请一个一个下载)
         </p>
 
         <span>Server storage / 服务器存储:</span>
@@ -127,7 +131,6 @@
         const jumpDepotButton = document.getElementById("jumpDepotButton");
         const queueStatus = document.getElementById("queueStatus");
         const freeSpaceStatus = document.getElementById("freeSpaceStatus");
-        const APP_ID = 1281930;
 
         function setStatus(message, type) {
             queueStatus.textContent = message;
@@ -241,7 +244,7 @@
                 return;
             }
 
-            window.location.href = `/depots/${APP_ID}/${parsed.pubFileId}/`;
+            window.location.href = `/depots/${parsed.pubFileId}/`;
         });
 
         queueForm.addEventListener("submit", async (event) => {

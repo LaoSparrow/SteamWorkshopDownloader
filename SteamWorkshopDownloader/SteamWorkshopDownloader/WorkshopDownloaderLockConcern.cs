@@ -40,14 +40,14 @@ public class WorkshopDownloaderLockConcern(IHandler content) : IConcern
         var splitTarget = normalizedTarget.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         
         // GenHTTP blocks .. and . in url, so i think it is safe??
-        // /depots/APP_ID/PUBFILE_ID
-        if (splitTarget.Length < 3)
+        // /depots/PUBFILE_ID
+        if (splitTarget.Length < 2)
             return Content.HandleAsync(request); // not enough length, pass
         
-        if (splitTarget[0] != "depots" || splitTarget[1] != Constants.APP_ID.ToString())
+        if (splitTarget[0] != "depots")
             return Content.HandleAsync(request); // not depots, pass
         
-        if (!ulong.TryParse(splitTarget[2], out var pubFileId))
+        if (!ulong.TryParse(splitTarget[1], out var pubFileId))
             return Content.HandleAsync(request); // cannot be parsed as ulong, pass
 
         if (!LockedPubfileIds.ContainsKey(pubFileId))

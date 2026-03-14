@@ -100,10 +100,9 @@ public static class Utils
             
             try
             {
-                result.Add(dir.Name);
-                
                 // 加入异常捕获，防止个别文件被占用导致整体中止
                 dir.Delete(true);
+                result.Add(dir.Name);
                 
                 // 成功删除后，剩余空间增加
                 currentFreeSpace += dirOccupiedSize;

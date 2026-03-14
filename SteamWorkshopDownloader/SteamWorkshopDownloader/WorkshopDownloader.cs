@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.IO.Compression;
 using System.Threading.Channels;
 using DepotDownloader;
 
@@ -6,6 +7,17 @@ namespace SteamWorkshopDownloader;
 
 public static class WorkshopDownloader
 {
+    private static readonly HashSet<uint> AllowedConsumerAppIds =
+    [
+        1281930,
+        105600
+    ];
+
+    private static readonly HashSet<uint> ArchivedConsumerAppIds =
+    [
+        105600
+    ];
+
     public record DownloadQueueEntry(ulong PubFileId, DateTime RequestDateTime);
     
     public static Task? DownloaderTask;
@@ -94,8 +106,9 @@ public static class WorkshopDownloader
             while (!Cts.Token.IsCancellationRequested &&
                    await DownloadQueue.Reader.WaitToReadAsync(Cts.Token))
             {
-                RemoveFromLastDownloads(
-                    Utils.CleanUpDirectory($"./depots/{Constants.APP_ID}", EXPECTED_FREE_SPACE));
+                var cleanedDirectories = Utils.CleanUpDirectory("./depots", EXPECTED_FREE_SPACE);
+                LogCleanedDirectories(cleanedDirectories);
+                RemoveFromLastDownloads(cleanedDirectories);
                 
                 // anonymous
                 if (ContentDownloader.InitializeSteam3(null, null))
@@ -106,15 +119,54 @@ public static class WorkshopDownloader
                         {
                             try
                             {
-                                using var _ = new DepotLocker(entry.PubFileId);
-                                if (Directory.Exists($"./depots/{Constants.APP_ID}/{entry.PubFileId}"))
-                                    Directory.SetLastAccessTimeUtc($"./depots/{Constants.APP_ID}/{entry.PubFileId}", DateTime.UtcNow);
+                                using var depotLocker = new DepotLocker(entry.PubFileId);
+                                var installDirectory = $"./depots/{entry.PubFileId}";
+                                if (Directory.Exists(installDirectory))
+                                    Directory.SetLastAccessTimeUtc(installDirectory, DateTime.UtcNow);
                                 
                                 CurrentDownloadEntry = entry;
+                                try
+                                {
+                                    if (await SteamPublishedFileApi.IsCollectionAsync(entry.PubFileId, Cts.Token))
+                                    {
+                                        await ExceptionQueue.Writer.WriteAsync((entry,
+                                            new InvalidOperationException($"pubfile {entry.PubFileId} is a collection and collection downloads are not supported.")));
+                                        continue;
+                                    }
+                                }
+                                catch (Exception ex) when (ex is not OperationCanceledException)
+                                {
+                                    LastDownloads.TryRemove(entry.PubFileId, out _);
+                                    await ExceptionQueue.Writer.WriteAsync((entry, ex));
+                                    continue;
+                                }
+
+                                uint appId;
+                                try
+                                {
+                                    appId = await SteamPublishedFileApi.GetConsumerAppIdAsync(entry.PubFileId, Cts.Token);
+                                    EnsureAllowedConsumerAppId(entry.PubFileId, appId);
+                                }
+                                catch (Exception ex) when (ex is not OperationCanceledException)
+                                {
+                                    LastDownloads.TryRemove(entry.PubFileId, out _);
+                                    await ExceptionQueue.Writer.WriteAsync((entry, ex));
+                                    continue;
+                                }
+
                                 // Do the true download operations
-                                ContentDownloader.Config.InstallDirectorySuffix = entry.PubFileId.ToString();
-                                await ContentDownloader.DownloadPubfileAsync(Constants.APP_ID, entry.PubFileId);
-                                ContentDownloader.Config.InstallDirectorySuffix = string.Empty;
+                                try
+                                {
+                                    ContentDownloader.Config.InstallDirectorySuffix = entry.PubFileId.ToString();
+                                    await ContentDownloader.DownloadPubfileAsync(appId, entry.PubFileId);
+
+                                    if (ArchivedConsumerAppIds.Contains(appId))
+                                        CreatePubfileArchive(entry.PubFileId, installDirectory);
+                                }
+                                finally
+                                {
+                                    ContentDownloader.Config.InstallDirectorySuffix = string.Empty;
+                                }
                             }
                             catch (Exception ex) when (ex is not OperationCanceledException)
                             {
@@ -150,6 +202,88 @@ public static class WorkshopDownloader
             ContentDownloader.MessageCallback += msgCallback;
             ContentDownloader.Config.InstallDirectorySuffix = string.Empty;
         }
+    }
+
+    private static void EnsureAllowedConsumerAppId(ulong pubFileId, uint appId)
+    {
+        if (!AllowedConsumerAppIds.Contains(appId))
+            throw new InvalidOperationException($"consumer_app_id {appId} is not allowed for pubfile {pubFileId}.");
+    }
+
+    private static void LogCleanedDirectories(IEnumerable<string> cleanedDirectories)
+    {
+        foreach (var cleanedDirectory in cleanedDirectories)
+        {
+            MessageQueue.Writer.TryWrite((null, $"Cleaned up depot directory: {cleanedDirectory}"));
+        }
+    }
+
+    private static void CreatePubfileArchive(ulong pubFileId, string installDirectory)
+    {
+        if (!Directory.Exists(installDirectory))
+            throw new DirectoryNotFoundException($"Install directory '{installDirectory}' was not found.");
+
+        var installDirectoryFullPath = Path.GetFullPath(installDirectory);
+        var archivePath = Path.Combine(installDirectoryFullPath, $"{pubFileId}.zip");
+        if (File.Exists(archivePath))
+            File.Delete(archivePath);
+
+        var stagingArchivePath = Path.Combine(
+            Directory.GetParent(installDirectoryFullPath)?.FullName ?? installDirectoryFullPath,
+            $".{pubFileId}.{Guid.NewGuid():N}.zip");
+
+        var rootDirectoryInfo = new DirectoryInfo(installDirectoryFullPath);
+        var emptyDirectories = rootDirectoryInfo
+            .EnumerateDirectories("*", SearchOption.AllDirectories)
+            .Select(directory => new
+            {
+                Directory = directory,
+                RelativePath = Path.GetRelativePath(installDirectoryFullPath, directory.FullName).Replace('\\', '/')
+            })
+            .Where(x => !ShouldSkipArchivePath(x.RelativePath))
+            .Where(x => !x.Directory.EnumerateFileSystemInfos().Any())
+            .ToList();
+
+        var filesToArchive = rootDirectoryInfo
+            .EnumerateFiles("*", SearchOption.AllDirectories)
+            .Select(file => new
+            {
+                File = file,
+                RelativePath = Path.GetRelativePath(installDirectoryFullPath, file.FullName).Replace('\\', '/')
+            })
+            .Where(x => !ShouldSkipArchivePath(x.RelativePath))
+            .Where(x => !string.Equals(x.File.FullName, archivePath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        try
+        {
+            using (var archive = ZipFile.Open(stagingArchivePath, ZipArchiveMode.Create))
+            {
+                foreach (var directory in emptyDirectories)
+                {
+                    archive.CreateEntry(directory.RelativePath + "/");
+                }
+
+                foreach (var file in filesToArchive)
+                {
+                    archive.CreateEntryFromFile(file.File.FullName, file.RelativePath, CompressionLevel.Optimal);
+                }
+            }
+
+            File.Move(stagingArchivePath, archivePath, true);
+        }
+        finally
+        {
+            if (File.Exists(stagingArchivePath))
+                File.Delete(stagingArchivePath);
+        }
+    }
+
+    private static bool ShouldSkipArchivePath(string relativePath)
+    {
+        var normalizedRelativePath = relativePath.Replace('\\', '/');
+        return normalizedRelativePath.Equals(".DepotDownloader", StringComparison.OrdinalIgnoreCase) ||
+               normalizedRelativePath.StartsWith(".DepotDownloader/", StringComparison.OrdinalIgnoreCase);
     }
 
     public static void RemoveFromLastDownloads(IEnumerable<string> pubFileIds)
