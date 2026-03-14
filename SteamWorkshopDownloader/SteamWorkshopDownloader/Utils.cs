@@ -94,6 +94,9 @@ public static class Utils
         var result = new List<string>();
         foreach (var dir in parentDirInfo.GetDirectories().OrderBy(x => x.LastAccessTimeUtc))
         {
+            if (string.Equals(dir.Name, ".DepotDownloader", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var dirOccupiedSize = GetDirectorySize(dir.FullName);
             if (dirOccupiedSize == -1)
                 continue;
