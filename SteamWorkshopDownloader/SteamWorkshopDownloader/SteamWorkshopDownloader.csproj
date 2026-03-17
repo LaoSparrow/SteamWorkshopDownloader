@@ -20,10 +20,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <None Remove="Content\index.html"/>
-        <EmbeddedResource Include="Content\index.html"/>
-        <None Remove="Content\robots.txt" />
-        <EmbeddedResource Include="Content\robots.txt" />
+        <None Remove="Content\**\*" />
+        <EmbeddedResource Include="Content\**\*" />
 
         <None Remove="Resources\trapurls.txt" />
         <EmbeddedResource Include="Resources\trapurls.txt" />

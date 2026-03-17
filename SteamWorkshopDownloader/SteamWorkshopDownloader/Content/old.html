@@ -1,0 +1,309 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Trashy Workshop Downloader / 垃圾 Workshop 下载器</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 24px;
+        }
+
+        .queue-form {
+            margin-top: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        #freeSpaceStatus {
+            margin: 6px 0 0;
+            min-height: 1.2em;
+        }
+
+        #freeSpaceStatus.error {
+            color: #991b1b;
+        }
+
+        .queue-form label {
+            font-weight: 600;
+            width: 100%;
+        }
+
+        .queue-form input {
+            min-width: 260px;
+            flex: 1;
+            max-width: 460px;
+            padding: 8px;
+        }
+
+        .queue-form button {
+            padding: 8px 12px;
+        }
+
+        #queueStatus {
+            margin-top: 8px;
+            min-height: 1.2em;
+        }
+
+        #queueStatus.success {
+            color: #166534;
+        }
+
+        #queueStatus.error {
+            color: #991b1b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div>
+
+        <h1>Trashy Workshop Downloader / 垃圾 Workshop 下载器</h1>
+        
+        <p>I made this random sh*t within hours, so don't blame me for this :(</p>
+        <p>这坨东西是我几小时搓出来的，很垃圾所以别骂我 :(</p>
+        
+        <a href="/depots/">Click here to browse available workshop files / 点击查看可用的 workshop files</a>
+
+        <form id="queueForm" class="queue-form">
+            <label for="urlOrIdInput">Workshop Url Or Id / Workshop 网址或者 id</label>
+            <input
+                id="urlOrIdInput"
+                name="urlOrId"
+                type="text"
+                placeholder="https://steamcommunity.com/sharedfiles/filedetails/?id=xxxxxxx"
+                autocomplete="off" />
+            <button id="jumpDepotButton" type="button">Open Depot / 查看对应 Depot 文件</button>
+            <button id="queueSubmitButton" type="submit">Queue Download / 添加到下载队列</button>
+        </form>
+        <p id="queueStatus" aria-live="polite"></p>
+        
+        <p>
+            Usage: <br>
+            Goto tModLoader Workshop <a href="https://steamcommunity.com/app/1281930/workshop/">https://steamcommunity.com/app/1281930/workshop/</a> <br>
+            or Terraria Workshop <a href="https://steamcommunity.com/app/105600/workshop/">https://steamcommunity.com/app/105600/workshop/</a> <br>
+            Search for the mod / resources pack you want <br>
+            Click into mod info page (where you can see the green "+ Subscribe" button) <br>
+            Copy the link <br>
+            Go back to this page and paste the link into the above textbox <br>
+            Click "Open Depot" <br>
+            If it shows 404, click "Queue Download", wait for 10-30s for the server to pull mods from steam <br>
+            Then click "Open Depot" again <br>
+            You got the mod files! Yay! <br>
+            (It would be better to check if the mod files have been downloaded by clicking "Open Depot", so less time will be wasted) <br>
+            (Only click "Queue Download" if you think the mod files have been updated) <br>
+            (Collection workshop items are not supported, please download them one by one)
+        </p>
+        
+        <p>
+            用法: <br>
+            去 tModLoader Workshop <a href="https://steamcommunity.com/app/1281930/workshop/">https://steamcommunity.com/app/1281930/workshop/</a> <br>
+            或者 泰拉瑞亚 Workshop <a href="https://steamcommunity.com/app/105600/workshop/">https://steamcommunity.com/app/105600/workshop/</a> <br>
+            搜索你想要的 mod / 材质包 <br>
+            点击进入 mod 详情页 (也就是你能看到绿色的 "+ 订阅" 按钮的页面) <br>
+            复制网页链接 <br>
+            回到这个页面，然后把链接粘贴到上面的文本框里 <br>
+            点击 "查看对应 Depot 文件" <br>
+            如果报错 404，点击 "添加到下载队列"，等 10-30 秒让服务器从 steam 拉取 mod 文件 <br>
+            然后再点击 "查看对应 Depot 文件" <br>
+            然后就拿到 mod 文件了( <br>
+            (最好先点击 "查看对应 Depot 文件" 查看 mod 文件是不是被下过了，更节省时间) <br>
+            (不要上来就点 "添加到下载队列" ，只有在你觉得 mod 有更新的时候点) <br>
+            (collection 类型的 workshop item 不支持，请一个一个下载)
+        </p>
+
+        <span>Server storage / 服务器存储:</span>
+        <p id="freeSpaceStatus" aria-live="polite">Loading...</p>
+
+        <a href="/api/downloader/logs">Click here to show logs / 点击查看日志</a>
+
+    </div>
+
+    <script>
+        const queueForm = document.getElementById("queueForm");
+        const urlOrIdInput = document.getElementById("urlOrIdInput");
+        const queueSubmitButton = document.getElementById("queueSubmitButton");
+        const jumpDepotButton = document.getElementById("jumpDepotButton");
+        const queueStatus = document.getElementById("queueStatus");
+        const freeSpaceStatus = document.getElementById("freeSpaceStatus");
+
+        function setStatus(message, type) {
+            queueStatus.textContent = message;
+            queueStatus.className = type || "";
+        }
+
+        function setFreeSpaceStatus(message, type) {
+            freeSpaceStatus.textContent = message;
+            freeSpaceStatus.className = type || "";
+        }
+
+        function formatBytes(bytes) {
+            if (!Number.isFinite(bytes) || bytes < 0) {
+                return null;
+            }
+
+            if (bytes === 0) {
+                return "0 B";
+            }
+
+            const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+            let value = bytes;
+            let unitIndex = 0;
+
+            while (value >= 1024 && unitIndex < units.length - 1) {
+                value /= 1024;
+                unitIndex += 1;
+            }
+
+            const precision = unitIndex === 0 ? 0 : 2;
+            return `${value.toFixed(precision)} ${units[unitIndex]}`;
+        }
+
+        async function loadFreeSpace() {
+            try {
+                const response = await fetch("/api/downloader/available-free-space", {
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+
+                if (!response.ok) {
+                    setFreeSpaceStatus("Storage status unavailable.", "error");
+                    return;
+                }
+
+                const payload = await response.json();
+                const availableFreeSpace = Number(payload?.availableFreeSpace);
+                const totalSize = Number(payload?.totalSize);
+
+                if (!Number.isFinite(availableFreeSpace) || !Number.isFinite(totalSize) || totalSize <= 0 || availableFreeSpace < 0 || availableFreeSpace > totalSize) {
+                    setFreeSpaceStatus("Storage status unavailable.", "error");
+                    return;
+                }
+
+                const usedSpace = totalSize - availableFreeSpace;
+                const usedPercent = (usedSpace / totalSize) * 100;
+                const usedText = formatBytes(usedSpace);
+                const freeText = formatBytes(availableFreeSpace);
+                const totalText = formatBytes(totalSize);
+
+                if (!usedText || !freeText || !totalText) {
+                    setFreeSpaceStatus("Storage status unavailable.", "error");
+                    return;
+                }
+
+                setFreeSpaceStatus(
+                    `Used ${usedText} / ${totalText} (${usedPercent.toFixed(1)}%) | Free ${freeText}`,
+                    ""
+                );
+            } catch {
+                setFreeSpaceStatus("Storage status unavailable.", "error");
+            }
+        }
+
+        function tryExtractPubFileId(urlOrId) {
+            const value = urlOrId.trim();
+
+            try {
+                const uri = new URL(value);
+                if (uri.hostname !== "steamcommunity.com") {
+                    return { isSuccess: false, message: "not a url to steamcommunity.com" };
+                }
+
+                if (uri.protocol !== "http:" && uri.protocol !== "https:") {
+                    return { isSuccess: false, message: "not a url to steamcommunity.com" };
+                }
+
+                const id = uri.searchParams.get("id");
+                if (!id || !/^\d+$/.test(id)) {
+                    return { isSuccess: false, message: "id param is not a id" };
+                }
+
+                return { isSuccess: true, pubFileId: id };
+            } catch {
+                // Continue and try parse as raw numeric id.
+            }
+
+            if (/^\d+$/.test(value)) {
+                return { isSuccess: true, pubFileId: value };
+            }
+
+            return { isSuccess: false, message: "not a valid URL or ID" };
+        }
+
+        jumpDepotButton.addEventListener("click", () => {
+            const parsed = tryExtractPubFileId(urlOrIdInput.value);
+            if (!parsed.isSuccess) {
+                setStatus(parsed.message, "error");
+                return;
+            }
+
+            window.location.href = `/depots/${parsed.pubFileId}/`;
+        });
+
+        queueForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const value = urlOrIdInput.value.trim();
+            if (!value) {
+                setStatus("Please enter a workshop URL or ID.", "error");
+                return;
+            }
+
+            queueSubmitButton.disabled = true;
+            setStatus("Submitting...", "");
+
+            try {
+                const response = await fetch("/api/downloader/queue", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ UrlOrId: value })
+                });
+
+                let payload = null;
+                try {
+                    payload = await response.json();
+                } catch {
+                    payload = null;
+                }
+
+                const isObjectPayload = payload && typeof payload === "object";
+                const isSuccess = isObjectPayload && payload.isSuccess === true;
+                const isFailure = isObjectPayload && payload.isSuccess === false;
+                const message = isObjectPayload && typeof payload.message === "string"
+                    ? payload.message.trim()
+                    : "";
+
+                if (response.ok && isSuccess) {
+                    setStatus(message || "Queued successfully.", "success");
+                    return;
+                }
+
+                if (response.ok && isFailure) {
+                    setStatus(message || "Queue request was rejected.", "error");
+                    return;
+                }
+
+                setStatus("Queue request failed due to an unexpected response.", "error");
+            } catch {
+                setStatus("Queue request failed. Please check the server and try again.", "error");
+            } finally {
+                queueSubmitButton.disabled = false;
+            }
+        });
+
+        loadFreeSpace();
+    </script>
+
+</body>
+
+</html>

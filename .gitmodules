@@ -1,3 +1,6 @@
 [submodule "DepotDownloader"]
 	path = DepotDownloader
 	url = https://github.com/LaoSparrow/SteamWorkshopDownloader.DepotDownloader.git
+[submodule "mod-downloader-webui"]
+	path = mod-downloader-webui
+	url = https://github.com/ACaiCat/mod-downloader-webui.git

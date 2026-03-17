@@ -246,13 +246,16 @@ internal static class HoneypotPaths
     private static readonly string[] ReservedPrefixes =
     [
         "/api/downloader",
-        "/depots"
+        "/depots",
+        "/assets"
     ];
 
     private static readonly HashSet<string> ReservedExactPaths =
     [
         "/",
         "/index.html",
+        "/old.html",
+        "/vite.svg",
         "/favicon.ico",
         "/robots.txt",
         "/api/downloader",
