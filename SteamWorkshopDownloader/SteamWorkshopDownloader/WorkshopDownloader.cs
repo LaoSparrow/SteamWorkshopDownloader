@@ -90,11 +90,15 @@ public static class WorkshopDownloader
         {
             return PushDownloadQueueResult.ReachDownloadThreshold;
         }
-        LastDownloads[pubFileId] = DateTime.UtcNow;
         
-        return DownloadQueue.Writer.TryWrite(new DownloadQueueEntry(pubFileId, DateTime.UtcNow))
+        var result = DownloadQueue.Writer.TryWrite(new DownloadQueueEntry(pubFileId, DateTime.UtcNow))
             ? PushDownloadQueueResult.Success
             : PushDownloadQueueResult.QueueFull;
+
+        if (result == PushDownloadQueueResult.Success)
+            LastDownloads[pubFileId] = DateTime.UtcNow;
+        
+        return result;
     }
 
     private static async Task DownloaderLoop()
