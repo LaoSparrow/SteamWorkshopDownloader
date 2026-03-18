@@ -174,6 +174,7 @@ public static class WorkshopDownloader
                             }
                             catch (Exception ex) when (ex is not OperationCanceledException)
                             {
+                                LastDownloads.TryRemove(entry.PubFileId, out _);
                                 await ExceptionQueue.Writer.WriteAsync((entry, ex));
                             }
                             finally
