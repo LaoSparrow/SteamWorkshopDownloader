@@ -23,8 +23,6 @@ public static class WorkshopDownloader
     public static Task? DownloaderTask;
     public static CancellationTokenSource Cts = new();
     public static Channel<DownloadQueueEntry> DownloadQueue = Channel.CreateBounded<DownloadQueueEntry>(5);
-    public static Channel<(DownloadQueueEntry?, Exception)> ExceptionQueue = Channel.CreateUnbounded<(DownloadQueueEntry?, Exception)>();
-    public static Channel<(DownloadQueueEntry?, string)> MessageQueue = Channel.CreateUnbounded<(DownloadQueueEntry?, string)>();
 
     public static DownloadQueueEntry? CurrentDownloadEntry;
     
@@ -41,29 +39,6 @@ public static class WorkshopDownloader
 
         ContentDownloader.Config.MaxDownloads = 8;
         AccountSettingsStore.LoadFromFile("account.config");
-        
-        // TODO: true handling
-        Task.Run(async () =>
-        {
-            while (!Cts.IsCancellationRequested)
-            {
-                await foreach (var i in ExceptionQueue.Reader.ReadAllAsync(Cts.Token))
-                {
-                    Console.WriteLine(i.Item1);
-                    Console.WriteLine(i.Item2);
-                }
-            }
-        });
-        Task.Run(async () =>
-        {
-            while (!Cts.IsCancellationRequested)
-            {
-                await foreach (var i in MessageQueue.Reader.ReadAllAsync(Cts.Token))
-                {
-                    Console.WriteLine(i);
-                }
-            }
-        });
     }
 
     public static async Task Shutdown()
@@ -103,7 +78,7 @@ public static class WorkshopDownloader
 
     private static async Task DownloaderLoop()
     {
-        Action<string> msgCallback = msg => MessageQueue.Writer.TryWrite((CurrentDownloadEntry, msg));
+        Action<string> msgCallback = msg => Console.WriteLine((CurrentDownloadEntry, msg));
         ContentDownloader.MessageCallback += msgCallback;
         try
         {
@@ -133,7 +108,7 @@ public static class WorkshopDownloader
                                 {
                                     if (await SteamPublishedFileApi.IsCollectionAsync(entry.PubFileId, Cts.Token))
                                     {
-                                        await ExceptionQueue.Writer.WriteAsync((entry,
+                                        Console.WriteLine((entry,
                                             new InvalidOperationException($"pubfile {entry.PubFileId} is a collection and collection downloads are not supported.")));
                                         continue;
                                     }
@@ -141,7 +116,7 @@ public static class WorkshopDownloader
                                 catch (Exception ex) when (ex is not OperationCanceledException)
                                 {
                                     LastDownloads.TryRemove(entry.PubFileId, out _);
-                                    await ExceptionQueue.Writer.WriteAsync((entry, ex));
+                                    Console.WriteLine((entry, ex));
                                     continue;
                                 }
 
@@ -154,7 +129,7 @@ public static class WorkshopDownloader
                                 catch (Exception ex) when (ex is not OperationCanceledException)
                                 {
                                     LastDownloads.TryRemove(entry.PubFileId, out _);
-                                    await ExceptionQueue.Writer.WriteAsync((entry, ex));
+                                    Console.WriteLine((entry, ex));
                                     continue;
                                 }
 
@@ -162,10 +137,17 @@ public static class WorkshopDownloader
                                 try
                                 {
                                     ContentDownloader.Config.InstallDirectorySuffix = entry.PubFileId.ToString();
-                                    await ContentDownloader.DownloadPubfileAsync(appId, entry.PubFileId);
+                                    await ContentDownloader.DownloadPubfileAsync(appId, entry.PubFileId)
+                                        .ConfigureAwait(false);
 
                                     if (ArchivedConsumerAppIds.Contains(appId))
                                         CreatePubfileArchive(entry.PubFileId, installDirectory);
+                                }
+                                catch (Exception ex) when (ex is OperationCanceledException)
+                                {
+                                    LastDownloads.TryRemove(entry.PubFileId, out _);
+                                    Console.WriteLine((entry, $"Workshop download cancelled: {ex}"));
+                                    continue;
                                 }
                                 finally
                                 {
@@ -175,7 +157,7 @@ public static class WorkshopDownloader
                             catch (Exception ex) when (ex is not OperationCanceledException)
                             {
                                 LastDownloads.TryRemove(entry.PubFileId, out _);
-                                await ExceptionQueue.Writer.WriteAsync((entry, ex));
+                                Console.WriteLine((entry, ex));
                             }
                             finally
                             {
@@ -190,22 +172,23 @@ public static class WorkshopDownloader
                 }
                 else
                 {
-                    await ExceptionQueue.Writer.WriteAsync((null, new Exception("Failed to login as anonymous")));
+                    Console.WriteLine(ValueTuple.Create(new Exception("Failed to login as anonymous")));
                 }
             }
         }
         catch (OperationCanceledException)
         {
-            // no op
+            Console.WriteLine("Workshop downloader was canceled.");
         }
         catch (Exception ex)
         {
-            await ExceptionQueue.Writer.WriteAsync((null, ex));
+            Console.WriteLine(ValueTuple.Create(ex));
         }
         finally
         {
-            ContentDownloader.MessageCallback += msgCallback;
+            ContentDownloader.MessageCallback -= msgCallback;
             ContentDownloader.Config.InstallDirectorySuffix = string.Empty;
+            Console.WriteLine("Workshop downloader has been shutdown.");
         }
     }
 
@@ -219,7 +202,7 @@ public static class WorkshopDownloader
     {
         foreach (var cleanedDirectory in cleanedDirectories)
         {
-            MessageQueue.Writer.TryWrite((null, $"Cleaned up depot directory: {cleanedDirectory}"));
+            Console.WriteLine(ValueTuple.Create($"Cleaned up depot directory: {cleanedDirectory}"));
         }
     }
 
