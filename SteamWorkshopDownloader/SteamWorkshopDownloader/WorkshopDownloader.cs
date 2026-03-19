@@ -63,6 +63,7 @@ public static class WorkshopDownloader
     {
         if (LastDownloads.TryGetValue(pubFileId, out var lastDownload) && DateTime.UtcNow - lastDownload < Interval)
         {
+            Console.WriteLine($"Trying to push download queue: pubFileId = {pubFileId}, result = {PushDownloadQueueResult.ReachDownloadThreshold:G}");
             return PushDownloadQueueResult.ReachDownloadThreshold;
         }
         
@@ -72,7 +73,9 @@ public static class WorkshopDownloader
 
         if (result == PushDownloadQueueResult.Success)
             LastDownloads[pubFileId] = DateTime.UtcNow;
-        
+
+        Console.WriteLine($"Trying to push download queue: pubFileId = {pubFileId}, result = {result:G}");
+
         return result;
     }
 
